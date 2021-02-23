@@ -1,5 +1,9 @@
 import torch
 import torch.nn as nn
+import functools
+from functools import lru_cache
+import numpy as np
+
 
 def cal_angle(position, hid_idx,hidden_dim):
     return position / np.power(10000, 2 * (hid_idx // 2) / hidden_dim)
@@ -10,7 +14,7 @@ def get_posi_angle_vec(position,hidden_dim):
 @lru_cache(maxsize=1)
 def static_position_table_f(hidden_dim,max_length=3000):
 
-    sinusoid_table          = np.array([get_posi_angle_vec(pos_i,hidden_dim) for pos_i in range(3000)])
+    sinusoid_table          = np.array([get_posi_angle_vec(pos_i,hidden_dim) for pos_i in range(max_length)])
     sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])
     sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  
     sinusoid_table          = torch.FloatTensor(sinusoid_table).to(dtype=torch.float32)
@@ -26,13 +30,13 @@ def positional_table_gen(trainable, hidden_dim, max_timestep):
 
 def trainable_position_enc(position_table, idxes):
     # recycle usage handling long range input
-    idx = idxes % position_table.weights.shape[0]
+    idx = idxes % position_table.weight.data.shape[0]
     return position_table(idx)
 
 def nontrainable_position_enc(position_table, idxes):
     max_idx = max(idxes)
-    if max_idx >= position_table.shape[0]:
-        sinusoid_table = static_position_table_f(hidden_dim, max_timestep).to(idxes.device)
+    if max_idx >= position_table.weight.data.shape[0]:
+        sinusoid_table = static_position_table_f(hidden_dim, max_idx).to(idxes.device)
     return sinusoid_table(idxes)
 
 def positional_fn(trainable):
@@ -41,6 +45,21 @@ def positional_fn(trainable):
     else:
         # sinusoid table
         return nontrainable_position_enc
+
+def gelu(x):
+    """Implementation of the gelu activation function.
+        For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
+        0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+        Also see https://arxiv.org/abs/1606.08415
+    """
+    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+
+def swish(x):
+    return x * torch.sigmoid(x)
+
+
+ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish}
 
 class InputRep(nn.Module):
 
@@ -91,7 +110,7 @@ class SelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, attention_mask, head_mask=None):
+    def forward(self, hidden_states, attention_mask):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -114,10 +133,6 @@ class SelfAttention(nn.Module):
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
-
-        # Mask heads if we want to
-        if head_mask is not None:
-            attention_probs = attention_probs * head_mask
 
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
@@ -179,3 +194,130 @@ class Output(nn.Module):
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
+
+class Layer(nn.Module):
+    def __init__(self, config):
+        super(Layer, self).__init__()
+        self.attention = Attention(config)
+        self.intermediate = Intermediate(config)
+        self.output = Output(config)
+
+    def forward(self, hidden_states, attention_mask):
+        attention_output, attentions = self.attention(hidden_states, attention_mask)
+        intermediate_output = self.intermediate(attention_output)
+        layer_output = self.output(intermediate_output, attention_output)
+
+        return layer_output, attentions
+
+class Encoder(nn.Module):
+    def __init__(self, config):
+        super(Encoder, self).__init__()
+        layer = Layer(config)
+        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_layers)])
+
+    def forward(self, hidden_states, attention_mask):
+        all_encoder_layers = []
+        all_attentions = []
+        for i, layer_module in enumerate(self.layer):
+            hidden_states, attentions = layer_module(
+                hidden_states, attention_mask)
+            all_attentions.append(attentions.cpu())
+            all_encoder_layers.append(hidden_states)
+
+        return all_encoder_layers, all_attentions
+
+
+
+class SpecHead(nn.Module):
+    def __init__(self, config, output_dim):
+        super(SpecHead, self).__init__()
+        self.output_dim = output_dim
+        self.dense = nn.Linear(config.hidden_dim, config.hidden_dim)
+        self.transform_act_fn = ACT2FN[config.act_fn]
+        self.LayerNorm = torch.nn.LayerNorm(config.hidden_dim, eps=config.norm_eps)
+        self.output = nn.Linear(config.hidden_dim, self.output_dim * config.downsample_rate)
+
+    def forward(self, hidden_states):
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.transform_act_fn(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        linear_output = self.output(hidden_states)
+        return linear_output, hidden_states
+
+class InitModel(nn.Module):
+    
+    """ 
+    An abstract class to handle weights initialization.
+    """
+
+    def __init__(self, config, *inputs, **kwargs):
+        super(InitModel, self).__init__()
+        self.config = config
+
+    def init_weights(self, module):
+        """ Initialize the weights. """
+        if isinstance(module, nn.Linear):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.init_range)
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+        
+        # trainable positional encoding
+        if config.trainable:
+            if isinstance(module, nn.Embedding):
+                module.weight.data.normal_(mean=0.0, std=self.config.init_range)
+
+
+class MockingjayModel(InitModel):
+    """
+    MockingjayModel 
+    """
+
+    def __init__(self, config, input_dim):
+        super(MockingjayModel, self).__init__(config)
+        self.input_reps = InputRep(config, input_dim)
+        self.encoder = Encoder(config)
+        self.apply(self.init_weights)
+
+    def forward(self, spec_input, pos_enc, attention_mask):
+        if attention_mask is None:
+            attention_mask = torch.ones_like(spec_input)
+
+        # We create a 3D attention mask from a 2D tensor mask.
+        # Sizes are [batch_size, 1, 1, to_seq_length]
+        # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
+        # this attention mask is more simple than the triangular masking of causal attention
+        # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+        extended_attention_mask = attention_mask[:,None,None]
+
+        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+        # masked positions, this operation will create a tensor which is 0.0 for
+        # positions we want to attend and -10000.0 for masked positions.
+        # Since we are adding it to the raw scores before the softmax, this is
+        # effectively the same as removing these entirely.
+        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        input_representations = self.input_reps(spec_input, pos_enc)
+        encoded_layers, all_attentions = self.encoder(input_representations, extended_attention_mask)
+        
+        return encoded_layers, all_attentions
+
+
+class AcousticModel(nn.Module):
+    """
+    AcousticModel for pre-training stage
+    """
+
+    def __init__(self, Model, SpecHead):
+        super(AcousticModel, self).__init__()
+        self.Model = Model
+        self.SpecHead = SpecHead
+
+    def forward(self, spec_input, layer_index, pos_idx, attention_mask=None):
+        sequence_output, all_attentions = self.Model(spec_input, pos_idx, attention_mask)
+        pred_spec, pred_state = self.SpecHead(sequence_output[layer_index])
+        return pred_spec, pred_state, all_attentions
