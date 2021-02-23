@@ -213,7 +213,12 @@ class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()
         layer = Layer(config)
-        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_layers)])
+        if config.share_across_layer:
+            # shallow copy
+            self.layer = nn.ModuleList([copy.copy(layer) for _ in range(config.num_layers)])
+        else:
+            # deep copy
+            self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_layers)])
 
     def forward(self, hidden_states, attention_mask):
         all_encoder_layers = []
@@ -272,13 +277,13 @@ class InitModel(nn.Module):
                 module.weight.data.normal_(mean=0.0, std=self.config.init_range)
 
 
-class MockingjayModel(InitModel):
+class PretrainedModel(InitModel):
     """
-    MockingjayModel 
+    PretrainedModel 
     """
 
     def __init__(self, config, input_dim):
-        super(MockingjayModel, self).__init__(config)
+        super(PretrainedModel, self).__init__(config)
         self.input_reps = InputRep(config, input_dim)
         self.encoder = Encoder(config)
         self.apply(self.init_weights)
