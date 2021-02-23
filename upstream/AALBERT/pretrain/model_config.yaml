@@ -1,5 +1,6 @@
 model:
   common:
+    share_across_layer: True
     num_layers: 6
     hidden_dim: 768
     norm_eps: 1.0e-12
