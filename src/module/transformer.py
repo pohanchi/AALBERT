@@ -63,19 +63,19 @@ ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish}
 
 class InputRep(nn.Module):
 
-    def __init__(self, config, input_dim):
+    def __init__(self, input_dim, hidden_dim, downsample_rate, norm_eps, dropout, max_timestep, trainable, **kwargs):
         super(InputRep, self).__init__()
         
         # common setting
-        self.input_dim = config.input_dim
-        self.hidden_dim = config.hidden_dim
-        self.spec_transform = nn.Linear(input_dim * config.downsample_rate, config.hidden_dim)
-        self.LayerNorm = torch.nn.LayerNorm(config.hidden_dim, eps=config.norm_eps)
-        self.dropout = nn.Dropout(config.dropout)
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.spec_transform = nn.Linear(input_dim * downsample_rate, hidden_dim)
+        self.LayerNorm = torch.nn.LayerNorm(hidden_dim, eps=norm_eps)
+        self.dropout = nn.Dropout(dropout)
 
         # position setting
-        self.position_embed = positional_table_gen(config.trainable, self.hidden_dim, config.max_timestep)
-        self.position_fn = position_fn(config.trainable)
+        self.position_embed = positional_table_gen(trainable, hidden_dim, max_timestep)
+        self.position_fn = position_fn(trainable)
     
     def forward(self, spec, pos_idx):
         spec_transformed = self.spec_transform(spec)
@@ -87,22 +87,22 @@ class InputRep(nn.Module):
         return norm_embed
 
 class SelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, hidden_dim, attention_head, dropout, **kwargs):
         super(SelfAttention, self).__init__()
-        if config.hidden_size % config.attention_head != 0:
+        if hidden_dim % attention_head != 0:
             raise ValueError(
-                "The hidden size (%d) is not a multiple of the number of attention "
-                "heads (%d)" % (config.hidden_size, config.attention_head))
+                "The hidden dimension (%d) is not a multiple of the number of attention "
+                "heads (%d)" % (hidden_dim, attention_head))
         
-        self.attention_head = config.attention_head
-        self.attention_head_size = int(config.hidden_dim / config.attention_head)
+        self.attention_head = attention_head
+        self.attention_head_size = int(hidden_dim / attention_head)
         self.all_head_size = self.attention_head * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_dim, self.all_head_size)
-        self.key = nn.Linear(config.hidden_dim, self.all_head_size)
-        self.value = nn.Linear(config.hidden_dim, self.all_head_size)
+        self.query = nn.Linear(hidden_dim, self.all_head_size)
+        self.key = nn.Linear(hidden_dim, self.all_head_size)
+        self.value = nn.Linear(hidden_dim, self.all_head_size)
 
-        self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[
@@ -142,12 +142,12 @@ class SelfAttention(nn.Module):
         return context_layer, attention_probs
 
 class SelfOutput(nn.Module):
-    def __init__(self, config):
+    def __init__(self, hidden_dim, norm_eps, dropout, **kwargs):
         super(SelfOutput, self).__init__()
-        self.dense = nn.Linear(config.hidden_dim, config.hidden_dim)
-        self.LayerNorm = MockingjayLayerNorm(
-            config.hidden_dim, eps=config.norm_eps)
-        self.dropout = nn.Dropout(config.dropout)
+        self.dense = nn.Linear(hidden_dim, hidden_dim)
+        self.LayerNorm = torch.nn.LayerNorm(
+            hidden_dim, eps=norm_eps)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
@@ -158,8 +158,8 @@ class SelfOutput(nn.Module):
 class Attention(nn.Module):
     def __init__(self, config):
         super(Attention, self).__init__()
-        self.self = SelfAttention(config)
-        self.output = SelfOutput(config)
+        self.self = SelfAttention(**config)
+        self.output = SelfOutput(**config)
 
     def forward(self, input_tensor, attention_mask):
         self_output = self.self(input_tensor, attention_mask, head_mask)
@@ -168,13 +168,13 @@ class Attention(nn.Module):
         return attention_output ,attentions
 
 class Intermediate(nn.Module):
-    def __init__(self, config):
+    def __init__(self, hidden_dim, hidden_act, intermediate_dim, **kwargs):
         super(Intermediate, self).__init__()
-        self.dense = nn.Linear(config.hidden_dim, config.intermediate_dim)
-        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        self.dense = nn.Linear(hidden_dim, intermediate_dim)
+        if isinstance(hidden_act, str) or (sys.version_info[0] == 2 and isinstance(hidden_act, unicode)):
+            self.intermediate_act_fn = ACT2FN[hidden_act]
         else:
-            self.intermediate_act_fn = config.hidden_act
+            self.intermediate_act_fn = hidden_act
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -183,11 +183,11 @@ class Intermediate(nn.Module):
 
 
 class Output(nn.Module):
-    def __init__(self, config):
+    def __init__(self, intermediate_dim, hidden_dim, norm_eps, dropout, **kwargs):
         super(Output, self).__init__()
-        self.dense = nn.Linear(config.intermediate_dim, config.hidden_dim)
-        self.LayerNorm = torch.nn.LayerNorm(config.hidden_dim, eps=config.norm_eps)
-        self.dropout = nn.Dropout(config.dropout)
+        self.dense = nn.Linear(intermediate_dim, hidden_dim)
+        self.LayerNorm = torch.nn.LayerNorm(hidden_dim, eps=norm_eps)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
@@ -213,12 +213,12 @@ class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()
         layer = Layer(config)
-        if config.share_across_layer:
+        if config['share_across_layer']:
             # shallow copy
-            self.layer = nn.ModuleList([copy.copy(layer) for _ in range(config.num_layers)])
+            self.layer = nn.ModuleList([copy.copy(layer) for _ in range(config['num_layers'])])
         else:
             # deep copy
-            self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_layers)])
+            self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config['num_layers'])])
 
     def forward(self, hidden_states, attention_mask):
         all_encoder_layers = []
@@ -234,13 +234,13 @@ class Encoder(nn.Module):
 
 
 class SpecHead(nn.Module):
-    def __init__(self, config, output_dim):
+    def __init__(self, hidden_dim, act_fn, output_dim, norm_eps, downsample_rate):
         super(SpecHead, self).__init__()
         self.output_dim = output_dim
-        self.dense = nn.Linear(config.hidden_dim, config.hidden_dim)
-        self.transform_act_fn = ACT2FN[config.act_fn]
-        self.LayerNorm = torch.nn.LayerNorm(config.hidden_dim, eps=config.norm_eps)
-        self.output = nn.Linear(config.hidden_dim, self.output_dim * config.downsample_rate)
+        self.dense = nn.Linear(hidden_dim, hidden_dim)
+        self.transform_act_fn = ACT2FN[act_fn]
+        self.LayerNorm = torch.nn.LayerNorm(hidden_dim, eps=norm_eps)
+        self.output = nn.Linear(hidden_dim, self.output_dim * downsample_rate)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -264,7 +264,7 @@ class InitModel(nn.Module):
         if isinstance(module, nn.Linear):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.init_range)
+            module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
@@ -274,7 +274,7 @@ class InitModel(nn.Module):
         # trainable positional encoding
         if config.trainable:
             if isinstance(module, nn.Embedding):
-                module.weight.data.normal_(mean=0.0, std=self.config.init_range)
+                module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
 
 
 class PretrainedModel(InitModel):
@@ -284,8 +284,15 @@ class PretrainedModel(InitModel):
 
     def __init__(self, config, input_dim):
         super(PretrainedModel, self).__init__(config)
-        self.input_reps = InputRep(config, input_dim)
-        self.encoder = Encoder(config)
+
+        input_reps_config = 
+        {**config['common'], **config["embedding"], **config['position_embedding'], "input_dim": input_dim}
+
+        self.input_reps = InputRep(**input_reps_config)
+
+        encoder_reps_config = {**config['common'], **config['attention'], **config["fully_connected"]}
+
+        self.encoder = Encoder(encoder_reps_config)
         self.apply(self.init_weights)
 
     def forward(self, spec_input, pos_enc, attention_mask):
@@ -322,7 +329,8 @@ class AcousticModel(nn.Module):
         self.Model = Model
         self.SpecHead = SpecHead
 
-    def forward(self, spec_input, layer_index, pos_idx, attention_mask=None):
+    def forward(self, spec_input, layer_index, pos_idx, attention_mask):
         sequence_output, all_attentions = self.Model(spec_input, pos_idx, attention_mask)
         pred_spec, pred_state = self.SpecHead(sequence_output[layer_index])
+        
         return pred_spec, pred_state, all_attentions
