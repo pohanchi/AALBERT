@@ -77,8 +77,12 @@ class InputRep(nn.Module):
         self.position_embed = positional_table_gen(trainable, hidden_dim, max_timestep)
         self.position_fn = position_fn(trainable)
     
-    def forward(self, spec, pos_idx):
-        spec_transformed = self.spec_transform(spec)
+    def forward(self, spec, pos_idx, mode=None):
+        if mode is None:
+            spec_transformed = self.spec_transform(spec)
+        else:
+            spec_transformed = spec
+        
         pos_embed = self.position_fn(self.position_embed, pos_idx)
         out_embed = spec_transformed + pos_embed
         norm_embed = self.LayerNorm(out_embed)
@@ -226,28 +230,11 @@ class Encoder(nn.Module):
         for i, layer_module in enumerate(self.layer):
             hidden_states, attentions = layer_module(
                 hidden_states, attention_mask)
-            all_attentions.append(attentions.cpu())
+            all_attentions.append(attentions.detach().cpu())
             all_encoder_layers.append(hidden_states)
 
         return all_encoder_layers, all_attentions
 
-
-
-class SpecHead(nn.Module):
-    def __init__(self, hidden_dim, act_fn, output_dim, norm_eps, downsample_rate):
-        super(SpecHead, self).__init__()
-        self.output_dim = output_dim
-        self.dense = nn.Linear(hidden_dim, hidden_dim)
-        self.transform_act_fn = ACT2FN[act_fn]
-        self.LayerNorm = torch.nn.LayerNorm(hidden_dim, eps=norm_eps)
-        self.output = nn.Linear(hidden_dim, self.output_dim * downsample_rate)
-
-    def forward(self, hidden_states):
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.transform_act_fn(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states)
-        linear_output = self.output(hidden_states)
-        return linear_output, hidden_states
 
 class InitModel(nn.Module):
     
@@ -261,20 +248,19 @@ class InitModel(nn.Module):
 
     def init_weights(self, module):
         """ Initialize the weights. """
-        if isinstance(module, nn.Linear):
+        if isinstance(module, (nn.Linear, nn.Embedding)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
+            # necessary for static position embedding
+            if module.weight.requires_grad:
+                module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+
         
-        # trainable positional encoding
-        if config.trainable:
-            if isinstance(module, nn.Embedding):
-                module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
 
 
 class PretrainedModel(InitModel):
@@ -282,11 +268,11 @@ class PretrainedModel(InitModel):
     PretrainedModel 
     """
 
-    def __init__(self, config, input_dim):
+    def __init__(self, config):
         super(PretrainedModel, self).__init__(config)
 
         input_reps_config = 
-        {**config['common'], **config["embedding"], **config['position_embedding'], "input_dim": input_dim}
+        {**config['common'], **config["transform"], **config['position_embedding']}
 
         self.input_reps = InputRep(**input_reps_config)
 
@@ -295,7 +281,7 @@ class PretrainedModel(InitModel):
         self.encoder = Encoder(encoder_reps_config)
         self.apply(self.init_weights)
 
-    def forward(self, spec_input, pos_enc, attention_mask):
+    def forward(self, spec_input, pos_enc, attention_mask, mode):
         if attention_mask is None:
             attention_mask = torch.ones_like(spec_input)
 
@@ -313,24 +299,24 @@ class PretrainedModel(InitModel):
         # effectively the same as removing these entirely.
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
-        input_representations = self.input_reps(spec_input, pos_enc)
+        input_representations = self.input_reps(spec_input, pos_enc, mode)
         encoded_layers, all_attentions = self.encoder(input_representations, extended_attention_mask)
         
         return encoded_layers, all_attentions
 
 
-class AcousticModel(nn.Module):
-    """
-    AcousticModel for pre-training stage
-    """
+# class AcousticModel(nn.Module):
+#     """
+#     AcousticModel for pre-training stage
+#     """
 
-    def __init__(self, Model, SpecHead):
-        super(AcousticModel, self).__init__()
-        self.Model = Model
-        self.SpecHead = SpecHead
+#     def __init__(self, Model, SpecHead):
+#         super(AcousticModel, self).__init__()
+#         self.Model = Model
+#         self.SpecHead = SpecHead
 
-    def forward(self, spec_input, layer_index, pos_idx, attention_mask):
-        sequence_output, all_attentions = self.Model(spec_input, pos_idx, attention_mask)
-        pred_spec, pred_state = self.SpecHead(sequence_output[layer_index])
+#     def forward(self, spec_input, layer_index, pos_idx, attention_mask):
+#         sequence_output, all_attentions = self.Model(spec_input, pos_idx, attention_mask)
+#         pred_spec, pred_state = self.SpecHead(sequence_output[layer_index])
         
-        return pred_spec, pred_state, all_attentions
+#         return pred_spec, pred_state, all_attentions

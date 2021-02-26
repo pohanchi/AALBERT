@@ -84,7 +84,7 @@ def pretrain_args():
 
     return args, config, model_config
 
-def set_fix_seed(args):
+def set_fixed_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -97,7 +97,7 @@ def main():
     # get config and arguments
     args, config, model_config = pretrain_args()
 
-    set_fix_seed(args)
+    set_fixed_seed(args)
 
 
 if __name__ == "__main__":

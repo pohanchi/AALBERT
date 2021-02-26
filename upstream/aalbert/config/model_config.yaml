@@ -7,7 +7,8 @@ model:
     dropout: 0.0
     act_fn: "gelu"
     init_range: 0.02
-  embedding:
+  transform:
+    input_dim: 160  # 160 dimension mel-feature
     downsample_rate: 3
   position_embedding:
     max_timestep: 3000
@@ -16,3 +17,18 @@ model:
     attention_head: 12
   fully_connected:
     intermediate_dim: 3072
+
+
+audio:
+  win_ms: 25
+  hop_ms: 10
+  n_freq: 201
+  n_mels: 80
+  n_mfcc: 13
+
+  input:
+    feat_type: mel # feat_type can be: wav, complx, linear, mel, mfcc, phase
+    channel: 0
+    log: True
+    delta: 0
+    cmvn: True
