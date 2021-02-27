@@ -3,7 +3,9 @@ import numpy as np
 import torch
 import argparse
 import yaml
-
+import random
+from shutil import copyfile
+from upstream.aalbert import system, dataset
 
 def pretrain_args():
     parser = argparse.ArgumentParser()
@@ -17,7 +19,8 @@ def pretrain_args():
 
     parser.add_argument('-c', '--config', help='The yaml file for configuring the whole experiment except the upstream model')
     parser.add_argument('-g', '--model_config', help='The config file for constructing the pretrained model')
-    
+    parser.add_argument('-u', '--upstream', choices=os.listdir('upstream/'))
+
     # experiment directory, choose one to specify
     # expname uses the default root directory: result/downstream
     parser.add_argument('-n', '--expname', help='Save experiment at result/downstream/expname')
@@ -67,20 +70,22 @@ def pretrain_args():
     else:
 
         print('[Message] - Start a new experiment')
+        if args.expdir is None:
+            args.expdir = f'result/pretrain/{args.expname}'
         os.makedirs(args.expdir, exist_ok=True)
 
         if args.config is None:
-            args.config = f'./upstream/{args.upstream}/pretrain/pretrain_config/pretrain_config.yaml'
+            args.config = f'./upstream/{args.upstream}/pretrain_config.yaml'
         with open(args.config, 'r') as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
-        copyfile(args.config, f'{args.expdir}/pretrain_config/pretrain_config.yaml')
+        copyfile(args.config, f'{args.expdir}/pretrain_config.yaml')
 
         if args.model_config is None:
-            args.model_config = f'./upstream/{args.upstream}/pretrain/pretrain_config/model_config.yaml'
+            args.model_config = f'./upstream/{args.upstream}/model_config.yaml'
         with open(args.model_config, 'r') as file:
             model_config = yaml.load(file, Loader=yaml.FullLoader)
         
-        copyfile(args.model_config, f'{args.expdir}/pretrain_config/model_config.yaml')
+        copyfile(args.model_config, f'{args.expdir}/model_config.yaml')
 
     return args, config, model_config
 
@@ -99,6 +104,12 @@ def main():
 
     set_fixed_seed(args)
 
+    system_config = {"args":args, "training_config": config, "model_config":model_config}
+    pretrained_system = system.PretrainedSystem(**system_config)
+    datamodule_config = {"data_config": data_config['datarc'], "maxtimestep": data_config['datarc']['max_timestep']}
+    prerained_dataset = dataset.PretrainedDataModule(**datamodule_config)
+
+    exit()
 
 if __name__ == "__main__":
     main()
