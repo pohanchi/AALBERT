@@ -271,8 +271,7 @@ class PretrainedModel(InitModel):
     def __init__(self, config):
         super(PretrainedModel, self).__init__(config)
 
-        input_reps_config = 
-        {**config['common'], **config["transform"], **config['position_embedding']}
+        input_reps_config = {**config['common'], **config["transform"], **config['position_embedding']}
 
         self.input_reps = InputRep(**input_reps_config)
 
