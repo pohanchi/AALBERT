@@ -70,17 +70,17 @@ def pretrain_args():
         os.makedirs(args.expdir, exist_ok=True)
 
         if args.config is None:
-            args.config = f'./upstream/{args.upstream}/pretrain/config/pretrain_config.yaml'
+            args.config = f'./upstream/{args.upstream}/pretrain/pretrain_config/pretrain_config.yaml'
         with open(args.config, 'r') as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
-        copyfile(args.config, f'{args.expdir}/pretrain_config.yaml')
+        copyfile(args.config, f'{args.expdir}/pretrain_config/pretrain_config.yaml')
 
         if args.model_config is None:
-            args.model_config = f'./upstream/{args.upstream}/pretrain/config/model_config.yaml'
+            args.model_config = f'./upstream/{args.upstream}/pretrain/pretrain_config/model_config.yaml'
         with open(args.model_config, 'r') as file:
             model_config = yaml.load(file, Loader=yaml.FullLoader)
         
-        copyfile(args.model_config, f'{args.expdir}/config/model_config.yaml')
+        copyfile(args.model_config, f'{args.expdir}/pretrain_config/model_config.yaml')
 
     return args, config, model_config
 
