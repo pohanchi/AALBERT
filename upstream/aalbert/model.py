@@ -11,10 +11,10 @@ class AALBERT(nn.Module):
 
         spec_head_config = {**config['common'], **config['transform'] }
 
-    def forward(self, spec_input, pos_idx, attention_mask, layer_index=None, mode=None):
-        sequence_output, all_attentions = self.extractor(spec_input, pos_idx, attention_mask, mode)
+    def forward(self, spec_input, pos_idx, att_mask, layer_index=None, mode=None):
+        sequence_output, all_attentions = self.extractor(spec_input, pos_idx, att_mask, mode)
 
-        if layer_index is None
+        if layer_index is None:
             return sequence_output, None, all_attentions
         else:
             return sequence_output[layer_index], None, all_attentions[layer_index]
@@ -39,6 +39,7 @@ class SpecHead(nn.Module):
         super(SpecHead, self).__init__()
         self.name = name + "_head"
         self.output_dim = output_dim
+        self.downsample_rate = downsample_rate
         self.dense = nn.Linear(hidden_dim, hidden_dim)
         self.transform_act_fn = ACT2FN[act_fn]
         self.LayerNorm = torch.nn.LayerNorm(hidden_dim, eps=norm_eps)
@@ -49,4 +50,7 @@ class SpecHead(nn.Module):
         hidden_states = self.transform_act_fn(hidden_states)
         hidden_states = self.LayerNorm(hidden_states)
         linear_output = self.output(hidden_states)
+        linear_output = linear_output.reshape(hidden_states.shape[0], 
+                              hidden_states.shape[1]* self.downsample_rate, 
+                              hidden_states.shape[2]//self.downsample_rate)
         return linear_output, hidden_states
