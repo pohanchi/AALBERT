@@ -21,7 +21,7 @@ model:
 audio:
   win_ms: 25
   hop_ms: 10
-  n_freq: 201
+  n_freq: 1024
   n_mels: 80
   n_mfcc: 13
 
