@@ -1,6 +1,6 @@
 import os
 
-from .expert import UpstreamExpert as _UpstreamExpert
+from .system import PretrainedSystem as _UpstreamExpert
 
 
 def baseline_local(config, *args, **kwargs):
@@ -47,7 +47,8 @@ def mel(*args, **kwargs):
     """
         Baseline feature - Mel
     """
-    kwargs['config'] = os.path.join(os.path.dirname(__file__), 'mel.yaml')
+    if not kwargs.get("config", None):
+        kwargs['config'] = os.path.join(os.path.dirname(__file__), 'mel.yaml')
     return baseline_local(*args, **kwargs)
 
 
@@ -55,5 +56,6 @@ def linear(*args, **kwargs):
     """
         Baseline feature - Linear
     """
-    kwargs['config'] = os.path.join(os.path.dirname(__file__), 'linear.yaml')
+    if not kwargs.get("config", None):
+        kwargs['config'] = os.path.join(os.path.dirname(__file__), 'linear.yaml')
     return baseline_local(*args, **kwargs)
