@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
+import math
 from src.module import transformer
 
 class AALBERT(nn.Module):
     def __init__(self, config):
+        super().__init__()
 
         config['common']['share_across_layer'] = True
 
@@ -50,7 +52,4 @@ class SpecHead(nn.Module):
         hidden_states = self.transform_act_fn(hidden_states)
         hidden_states = self.LayerNorm(hidden_states)
         linear_output = self.output(hidden_states)
-        linear_output = linear_output.reshape(hidden_states.shape[0], 
-                              hidden_states.shape[1]* self.downsample_rate, 
-                              hidden_states.shape[2]//self.downsample_rate)
         return linear_output, hidden_states

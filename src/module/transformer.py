@@ -3,7 +3,8 @@ import torch.nn as nn
 import functools
 from functools import lru_cache
 import numpy as np
-
+import copy
+import math
 
 def cal_angle(position, hid_idx,hidden_dim):
     return position / np.power(10000, 2 * (hid_idx // 2) / hidden_dim)
@@ -34,12 +35,13 @@ def trainable_position_enc(position_table, idxes):
     return position_table(idx)
 
 def nontrainable_position_enc(position_table, idxes):
-    max_idx = max(idxes)
+    max_idx = idxes.max()
     if max_idx >= position_table.weight.data.shape[0]:
-        sinusoid_table = static_position_table_f(hidden_dim, max_idx).to(idxes.device)
-    return sinusoid_table(idxes)
+        sinusoid_table = static_position_table_f(hidden_dim, max_idx)
+        return sinusoid_table(idxes)
+    return position_table(idxes)
 
-def positional_fn(trainable):
+def position_fn(trainable):
     if trainable:
         return trainable_position_enc
     else:
@@ -82,8 +84,9 @@ class InputRep(nn.Module):
             spec_transformed = self.spec_transform(spec)
         else:
             spec_transformed = spec
-        
+
         pos_embed = self.position_fn(self.position_embed, pos_idx)
+
         out_embed = spec_transformed + pos_embed
         norm_embed = self.LayerNorm(out_embed)
         norm_embed = self.dropout(norm_embed)
@@ -166,19 +169,19 @@ class Attention(nn.Module):
         self.output = SelfOutput(**config)
 
     def forward(self, input_tensor, attention_mask):
-        self_output = self.self(input_tensor, attention_mask, head_mask)
+        self_output = self.self(input_tensor, attention_mask)
         self_output, attentions  = self_output
         attention_output = self.output(self_output, input_tensor)
         return attention_output ,attentions
 
 class Intermediate(nn.Module):
-    def __init__(self, hidden_dim, hidden_act, intermediate_dim, **kwargs):
+    def __init__(self, hidden_dim, act_fn, intermediate_dim, **kwargs):
         super(Intermediate, self).__init__()
         self.dense = nn.Linear(hidden_dim, intermediate_dim)
-        if isinstance(hidden_act, str) or (sys.version_info[0] == 2 and isinstance(hidden_act, unicode)):
-            self.intermediate_act_fn = ACT2FN[hidden_act]
+        if isinstance(act_fn, str) or (sys.version_info[0] == 2 and isinstance(act_fn, unicode)):
+            self.intermediate_act_fn = ACT2FN[act_fn]
         else:
-            self.intermediate_act_fn = hidden_act
+            self.intermediate_act_fn = act_fn
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -203,8 +206,8 @@ class Layer(nn.Module):
     def __init__(self, config):
         super(Layer, self).__init__()
         self.attention = Attention(config)
-        self.intermediate = Intermediate(config)
-        self.output = Output(config)
+        self.intermediate = Intermediate(**config)
+        self.output = Output(**config)
 
     def forward(self, hidden_states, attention_mask):
         attention_output, attentions = self.attention(hidden_states, attention_mask)
@@ -219,18 +222,26 @@ class Encoder(nn.Module):
         layer = Layer(config)
         if config['share_across_layer']:
             # shallow copy
-            self.layer = nn.ModuleList([copy.copy(layer) for _ in range(config['num_layers'])])
+            self.layer = nn.ModuleList([layer for _ in range(config['num_layers'])])
         else:
             # deep copy
             self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config['num_layers'])])
 
-    def forward(self, hidden_states, attention_mask):
+    def forward(self, hidden_states, attention_mask, output_attention=False,all_hidden=False):
         all_encoder_layers = []
         all_attentions = []
         for i, layer_module in enumerate(self.layer):
             hidden_states, attentions = layer_module(
                 hidden_states, attention_mask)
-            all_attentions.append(attentions.detach().cpu())
+            
+            if output_attention:
+                all_attentions.append(attentions.detach().cpu())
+            else:
+                all_attentions.append(None)
+            
+            if all_hidden:
+                all_encoder_layers.append(hidden_states)
+        if not all_hidden:
             all_encoder_layers.append(hidden_states)
 
         return all_encoder_layers, all_attentions
@@ -253,7 +264,7 @@ class InitModel(nn.Module):
             # cf https://github.com/pytorch/pytorch/pull/5617
             # necessary for static position embedding
             if module.weight.requires_grad:
-                module.weight.data.normal_(mean=0.0, std=self.config['init_range'])
+                module.weight.data.normal_(mean=0.0, std=self.config['common']['init_range'])
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
@@ -280,7 +291,7 @@ class PretrainedModel(InitModel):
         self.encoder = Encoder(encoder_reps_config)
         self.apply(self.init_weights)
 
-    def forward(self, spec_input, pos_enc, attention_mask, mode):
+    def forward(self, spec_input, pos_enc, attention_mask, mode, output_attention=False, all_hidden=False):
         if attention_mask is None:
             attention_mask = torch.ones_like(spec_input)
 
@@ -299,7 +310,7 @@ class PretrainedModel(InitModel):
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         input_representations = self.input_reps(spec_input, pos_enc, mode)
-        encoded_layers, all_attentions = self.encoder(input_representations, extended_attention_mask)
+        encoded_layers, all_attentions = self.encoder(input_representations, extended_attention_mask, output_attention, all_hidden)
         
         return encoded_layers, all_attentions
 

@@ -1,0 +1,20 @@
+model:
+  common:
+    share_across_layer: True
+    num_layers: 6
+    hidden_dim: 768
+    norm_eps: 1.0e-12
+    dropout: 0.0
+    act_fn: "gelu"
+    init_range: 0.02
+  transform:
+    input_dim: 80  # 80 dimension mel-feature
+    downsample_rate: 4
+  position_embedding:
+    max_timestep: 250
+    trainable: False
+  attention:
+    attention_head: 12
+  fully_connected:
+    intermediate_dim: 3072
+
