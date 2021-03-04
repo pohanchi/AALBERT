@@ -5,8 +5,11 @@ import argparse
 import yaml
 import random
 from shutil import copyfile
+from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from upstream.aalbert import system, dataset
-
+from utils import ProgressBar
 def pretrain_args():
     parser = argparse.ArgumentParser()
 
@@ -95,8 +98,6 @@ def set_fixed_seed(args):
     torch.manual_seed(args.seed)
     if torch.cuda.is_available(): 
         torch.cuda.manual_seed_all(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
 
 def main():
     # get config and arguments
@@ -106,10 +107,17 @@ def main():
 
     system_config = {"args":args, "training_config": config, "model_config":model_config}
     pretrained_system = system.PretrainedSystem(**system_config)
-    datamodule_config = {"data_config": data_config['datarc'], "maxtimestep": data_config['datarc']['max_timestep']}
+    datamodule_config = {"data_config": config['datarc'], "max_timestep": config['datarc']['max_timestep']}
     prerained_dataset = dataset.PretrainedDataModule(**datamodule_config)
+    wandb_logger = WandbLogger(name=args.expname,save_dir=args.expdir,config=system_config)
+    checkpoint_callback = ModelCheckpoint(monitor="train_loss", save_top_k=3, mode="min")
+    program_callback = ProgressBar()
+    trainer_config = { **config['trainer_config'], 'default_root_dir':  args.expdir, "logger": wandb_logger, "weights_save_path": args.expdir,
+     "callbacks": [checkpoint_callback, program_callback]}
 
-    exit()
+    trainer = Trainer(**trainer_config)
+    trainer.fit(pretrained_system, prerained_dataset)
+
 
 if __name__ == "__main__":
     main()
