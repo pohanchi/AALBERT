@@ -4,12 +4,13 @@ import torch
 import argparse
 import yaml
 import random
+import importlib
 from shutil import copyfile
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from upstream.aalbert import system, dataset
 from utils import ProgressBar
+
 def pretrain_args():
     parser = argparse.ArgumentParser()
 
@@ -26,7 +27,7 @@ def pretrain_args():
 
     # experiment directory, choose one to specify
     # expname uses the default root directory: result/downstream
-    parser.add_argument('-n', '--expname', help='Save experiment at result/downstream/expname')
+    parser.add_argument('-n', '--expname', help='Save experiment at result/pretrain/expname')
     parser.add_argument('-p', '--expdir', help='Save experiment at expdir')
 
     # options
@@ -106,6 +107,11 @@ def main():
     set_fixed_seed(args)
 
     system_config = {"args":args, "training_config": config, "model_config":model_config}
+
+    module_path = f'upstream.{args.upstream}'
+    system = importlib.import_module(module_path +'.system')
+    dataset = importlib.import_module(module_path+ '.dataset')
+
     pretrained_system = system.PretrainedSystem(**system_config)
     datamodule_config = {"data_config": config['datarc'], "max_timestep": config['datarc']['max_timestep']}
     prerained_dataset = dataset.PretrainedDataModule(**datamodule_config)
