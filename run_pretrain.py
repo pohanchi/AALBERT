@@ -68,6 +68,15 @@ def main():
     # get config and arguments
     args, config, model_config = pretrain_args()
 
+    with open(config['input']['config_path'], 'r') as file:
+        input_config = yaml.load(file, Loader=yaml.FullLoader)
+    copyfile(input_config, f'{args.expdir}/input_config.yaml')
+
+    for target in config['target']:
+        with open(target, 'r') as file:
+            target_config = yaml.load(file, Loader=yaml.FullLoader)
+        copyfile(target_config, f'{args.expdir}/target_config_{target['feature_type']}.yaml')
+
     set_fixed_seed(args)
 
     system_config = {"args":args, "training_config": config, "model_config":model_config}

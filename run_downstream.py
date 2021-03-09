@@ -21,6 +21,7 @@ def pretrain_args():
     parser.add_argument('-g', '--model_config', help='The config file for constructing the pretrained model')
     parser.add_argument('-u', '--upstream', choices=os.listdir('upstream/'))
     parser.add_argument('-d', '--downstream', choices=os.listdir('downstream/'))
+    parser.add_argument('-k', '--ckpt', default=None)
 
     # experiment directory, choose one to specify
     # expname uses the default root directory: result/downstream
@@ -63,13 +64,13 @@ def set_fixed_seed(args):
     if torch.cuda.is_available(): 
         torch.cuda.manual_seed_all(args.seed)
 
-def setup_upstream(system_config):
-    
-    module_path = f'upstream.{args.upstream}'
-    system = importlib.import_module(module_path +'.system')
-    pretrained_system = system.PretrainedSystem(**system_config)
+def set_downstream(system_config):
 
-    return pretrained_system
+    module_path = f'downstream.{args.downstream}'
+    system = importlib.import_module(module_path +'.system')
+    downstream_system = system.DownstreamSystem(**system_config)
+
+    return downstream_system
 
 def main():
     # get config and arguments
@@ -78,8 +79,23 @@ def main():
     set_fixed_seed(args)
 
     system_config = {"args":args, "training_config": config, "model_config":model_config}
-    upstream = setup_upstream(**system_config)
     
+    module_path = f'downstream.{args.downstream}'
+    system = importlib.import_module(module_path +'.system')
+    dataset = importlib.import_module(module_path+ '.dataset')
+
+    downstream_system = system.DowstreamSystem(**system_config)
+    datamodule_config = {'data_config': config['datarc'], "maxtimestep":config['datarc']['max_timestep']}
+    downstream_dataset = dataset.DownstreamDataModule(**datamodule_config)
+
+    wandb_logger = WandbLogger(name=args.expname,save_dir=args.expdir,config=system_config)
+    checkpoint_callback = ModelCheckpoint(monitor="train_loss", save_top_k=3, mode="min")
+    program_callback = ProgressBar()
+
+    trainer_config = { **config['trainer_config'], 'default_root_dir':  args.expdir, "logger": wandb_logger, "weights_save_path": args.expdir,"callbacks": [checkpoint_callback, program_callback]}
+
+    trainer = Trainer(**trainer_config)
+    trainer.fit(downstream_system, downstream_dataset)
 
 
 if __name__ == "__main__":

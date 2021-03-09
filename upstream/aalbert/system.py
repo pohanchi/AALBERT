@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import IPython
 import pdb
 from torch import nn
+from shutil import copyfile
 from torch.nn.utils.rnn import pad_sequence
 from .model import AALBERT, SpecHead
 from schedulers import *
@@ -14,7 +15,7 @@ examples_wavs = torch.randn(16000)
 
 class PretrainedSystem(pl.LightningModule):
 
-    def __init__(self, args, model_config, training_config):
+    def __init__(self, args, model_config, training_config, **kwargs):
         super().__init__()
 
         self.args = args
@@ -30,7 +31,6 @@ class PretrainedSystem(pl.LightningModule):
         
         # example wav forward to tradition feature extractor
         _ = self.tradition_feat_extractor([examples_wavs])
-
         if training_config.get("scheduler", None):
             self.scheduler_config = training_config['scheduler']
         else:
