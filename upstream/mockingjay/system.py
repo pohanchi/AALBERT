@@ -12,7 +12,7 @@ from schedulers import *
 
 class PretrainedSystem(pl.LightningModule):
 
-    def __init__(self, args, model_config, training_config):
+    def __init__(self, args, model_config, training_config, **kwargs):
         super().__init__()
 
         self.args = args
@@ -44,6 +44,7 @@ class PretrainedSystem(pl.LightningModule):
             self.pretrained_heads.append(SpecHead(**spechead_config))
         
         self.objective_loss = eval(f"nn.{training_config['loss_function']}")(reduction='sum')
+        self.save_hyperparameters()
 
     def downsample(self, feats):
         
@@ -107,6 +108,7 @@ class PretrainedSystem(pl.LightningModule):
         return all_hidden_states, _, all_attentions
 
     def training_step(self, batch, batch_idx):
+
         wav_list, _ = batch
         with torch.no_grad():
             feats = self.tradition_feat_extractor(wav_list)
