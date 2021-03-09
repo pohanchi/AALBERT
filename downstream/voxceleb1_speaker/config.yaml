@@ -1,0 +1,48 @@
+
+
+
+
+
+optimizer:
+  name: Adam
+  lr: 1.0e-4
+
+scheduler:
+  name: linear_decay_schedule_with_warmup
+  num_warmup_steps: 10000
+  num_training_steps: 500000
+
+datarc:
+  file_path: ../../librispeech/vox1_dev/wav
+  meta_data: ../../librispeech/vox1_dev/veri_test_class.txt
+
+
+modelrc:
+
+
+
+dataloader:
+  train_batch_size: 24
+  eval_batch_size: 1
+  num_workers: 8
+  pin_memory: true
+
+trainer_config:
+  accumulate_grad_batches: 1
+  amp_level: "O1"
+  gpus: '0'
+  gradient_clip_val: 10.0
+  max_steps: 100000
+  log_every_n_steps: 1000
+  benchmark: true
+  flush_logs_every_n_steps: 1000
+  deterministic: true
+  weights_summary: "top"
+  progress_bar_refresh_rate: 1
+  profiler: "simple"
+  process_position: 0
+
+
+
+
+
