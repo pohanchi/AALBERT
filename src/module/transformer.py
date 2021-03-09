@@ -236,13 +236,15 @@ class Encoder(nn.Module):
             
             if output_attention:
                 all_attentions.append(attentions.detach().cpu())
-            else:
-                all_attentions.append(None)
             
             if all_hidden:
                 all_encoder_layers.append(hidden_states)
+
         if not all_hidden:
             all_encoder_layers.append(hidden_states)
+        
+        if not output_attention:
+            all_attentions.append(None)
 
         return all_encoder_layers, all_attentions
 
@@ -313,20 +315,3 @@ class PretrainedModel(InitModel):
         encoded_layers, all_attentions = self.encoder(input_representations, extended_attention_mask, output_attention, all_hidden)
         
         return encoded_layers, all_attentions
-
-
-# class AcousticModel(nn.Module):
-#     """
-#     AcousticModel for pre-training stage
-#     """
-
-#     def __init__(self, Model, SpecHead):
-#         super(AcousticModel, self).__init__()
-#         self.Model = Model
-#         self.SpecHead = SpecHead
-
-#     def forward(self, spec_input, layer_index, pos_idx, attention_mask):
-#         sequence_output, all_attentions = self.Model(spec_input, pos_idx, attention_mask)
-#         pred_spec, pred_state = self.SpecHead(sequence_output[layer_index])
-        
-#         return pred_spec, pred_state, all_attentions

@@ -14,9 +14,6 @@ from utils import ProgressBar
 def pretrain_args():
     parser = argparse.ArgumentParser()
 
-    # train or test for this experiment
-    parser.add_argument('-m', '--mode', choices=['train', 'evaluate'])
-
     # use a ckpt as the experiment initialization
     # if set, all the following args and config will be overwrited by the ckpt, except args.mode
     parser.add_argument('-e', '--past_exp', metavar='{CKPT_PATH,CKPT_DIR}', help='Resume training from a checkpoint for evaluate it')
@@ -39,57 +36,24 @@ def pretrain_args():
     if args.expdir is None:
         args.expdir = f'result/pretrain/{args.expname}'
 
-    if os.path.isfile(f'{args.expdir}/{args.mode}_finished'):
-        exit(0)
 
-    if args.past_exp:
-        # determine checkpoint path
-        if os.path.isdir(args.past_exp):
-            ckpt_pths = glob.glob(f'{args.past_exp}/states-*.ckpt')
-            assert len(ckpt_pths) > 0
-            ckpt_pths = sorted(ckpt_pths, key=lambda pth: int(pth.split('-')[-1].split('.')[0]))
-            ckpt_pth = ckpt_pths[-1]
-        else:
-            ckpt_pth = args.past_exp
+    print('[Message] - Start a new experiment')
+    if args.expdir is None:
+        args.expdir = f'result/pretrain/{args.expname}'
+    os.makedirs(args.expdir, exist_ok=True)
 
-        print(f'[Message] - Resume from {ckpt_pth}')
+    if args.config is None:
+        args.config = f'./upstream/{args.upstream}/pretrain_config.yaml'
+    with open(args.config, 'r') as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
+    copyfile(args.config, f'{args.expdir}/pretrain_config.yaml')
 
-
-        # load checkpoint
-        ckpt = torch.load(ckpt_pth, map_location='cpu')
-
-        def update_args(old, new):
-            old_dict = vars(old)
-            new_dict = vars(new)
-            old_dict.update(new_dict)
-            return Namespace(**old_dict)
-
-        # overwrite args and config
-        mode = args.mode
-        args = update_args(args, ckpt['Args'])
-        config = ckpt['Config']
-        args.mode = mode
-        args.past_exp = ckpt_pth
-    
-    else:
-
-        print('[Message] - Start a new experiment')
-        if args.expdir is None:
-            args.expdir = f'result/pretrain/{args.expname}'
-        os.makedirs(args.expdir, exist_ok=True)
-
-        if args.config is None:
-            args.config = f'./upstream/{args.upstream}/pretrain_config.yaml'
-        with open(args.config, 'r') as file:
-            config = yaml.load(file, Loader=yaml.FullLoader)
-        copyfile(args.config, f'{args.expdir}/pretrain_config.yaml')
-
-        if args.model_config is None:
-            args.model_config = f'./upstream/{args.upstream}/model_config.yaml'
-        with open(args.model_config, 'r') as file:
-            model_config = yaml.load(file, Loader=yaml.FullLoader)
+    if args.model_config is None:
+        args.model_config = f'./upstream/{args.upstream}/model_config.yaml'
+    with open(args.model_config, 'r') as file:
+        model_config = yaml.load(file, Loader=yaml.FullLoader)
         
-        copyfile(args.model_config, f'{args.expdir}/model_config.yaml')
+    copyfile(args.model_config, f'{args.expdir}/model_config.yaml')
 
     return args, config, model_config
 

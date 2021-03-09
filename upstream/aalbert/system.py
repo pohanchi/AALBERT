@@ -10,6 +10,8 @@ from torch.nn.utils.rnn import pad_sequence
 from .model import AALBERT, SpecHead
 from schedulers import *
 
+examples_wavs = torch.randn(16000)
+
 class PretrainedSystem(pl.LightningModule):
 
     def __init__(self, args, model_config, training_config):
@@ -25,6 +27,10 @@ class PretrainedSystem(pl.LightningModule):
         self.masking_strategy = training_config['masking_strategy']
         self.pretrained_model = AALBERT(model_config['model'])
         self.optimizer_config = training_config['optimizer']
+        
+        # example wav forward to tradition feature extractor
+        _ = self.tradition_feat_extractor([examples_wavs])
+
         if training_config.get("scheduler", None):
             self.scheduler_config = training_config['scheduler']
         else:
@@ -32,6 +38,8 @@ class PretrainedSystem(pl.LightningModule):
         
         self.pretrained_heads = nn.ModuleList()
         self.target_feat_extractors = nn.ModuleList()
+
+        index = 0
         for feat in training_config['datarc']['target']:
             
             tradition_feat = getattr(importlib.import_module("hubconf"), feat['feature_type'])
@@ -42,8 +50,13 @@ class PretrainedSystem(pl.LightningModule):
 
             self.target_feat_extractors.append(tradition_feat(config=feat['config_path']))
             self.pretrained_heads.append(SpecHead(**spechead_config))
-        
+            
+            # example wav forward to tradition feature extractor
+            _ = self.target_feat_extractors[index]([examples_wavs])
+            index +=1
+
         self.objective_loss = eval(f"nn.{training_config['loss_function']}")(reduction='sum')
+        self.save_hyperparameters()
 
     def downsample(self, feats):
         
@@ -93,7 +106,8 @@ class PretrainedSystem(pl.LightningModule):
 
         return pos_idxes
 
-    def forward(self, x):
+    def forward(self, x, output_attention=False, all_hidden=False):
+
         feats = self.tradition_feat_extractor(x)
         stack_feats, _ = self.downsample(feats)
         att_masks = self.generate_att_mask(stack_feats)
@@ -101,12 +115,13 @@ class PretrainedSystem(pl.LightningModule):
         input_att_masks = pad_sequence(att_masks, batch_first=True).to(self.device).long()
         input_pos_idxs = self.generate_pos_idxes(input_att_masks).to(self.device).long()
 
-        forward_config = {"spec_input": input_feats, "att_mask": input_att_masks, "pos_idx": input_pos_idxs}
+        forward_config = {"spec_input": input_feats, "att_mask": input_att_masks, "pos_idx": input_pos_idxs, "output_attention": output_attention, "all_hidden": all_hidden}
         all_hidden_states, _, all_attentions = self.pretrained_model(**forward_config)
         
         return all_hidden_states, _, all_attentions
 
     def training_step(self, batch, batch_idx):
+
         wav_list, _ = batch
         with torch.no_grad():
             feats = self.tradition_feat_extractor(wav_list)
@@ -146,6 +161,10 @@ class PretrainedSystem(pl.LightningModule):
         items = super().get_progress_bar_dict()
         items.pop("v_num", None)
         return items
+    
+    # Interface
+    def get_output_dim(self):
+        return self.model_config.hidden_dim
     
     
     def configure_optimizers(self):
