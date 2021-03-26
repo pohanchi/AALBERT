@@ -13,13 +13,14 @@ class AALBERT(nn.Module):
 
         spec_head_config = {**config['common'], **config['transform'] }
 
-    def forward(self, spec_input, pos_idx, att_mask, layer_index=None, mode=None):
-        sequence_output, all_attentions = self.extractor(spec_input, pos_idx, att_mask, mode)
+    def forward(self, spec_input, pos_idx, att_mask, layer_index=None, mode=None, output_attention=False, all_hidden=False):
+
+        sequence_output, all_attentions = self.extractor(spec_input, pos_idx, att_mask, mode, all_hidden=all_hidden, output_attention=output_attention)
 
         if layer_index is None:
-            return sequence_output, None, all_attentions
+            return sequence_output, all_attentions
         else:
-            return sequence_output[layer_index], None, all_attentions[layer_index]
+            return sequence_output[layer_index], all_attentions[layer_index]
 
 def gelu(x):
     """Implementation of the gelu activation function.
