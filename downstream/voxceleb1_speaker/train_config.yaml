@@ -1,0 +1,55 @@
+optimizer:
+  name: AdamW
+  lr: 1.0e-4
+
+scheduler:
+  name: linear_decay_schedule_with_warmup
+  num_warmup_steps: 1000
+
+datarc:
+  file_path: ../../librispeech/voxceleb1/
+  meta_data: ../../librispeech/voxceleb1/veri_test_class.txt
+  max_timestep: 128000
+
+
+modelrc:
+  model_select: Model
+  loss_function: CrossEntropyLoss
+  agg_method: MP
+  hidden_dim: 768
+  out_dim: 1251
+
+  Model:
+    no_args: True
+
+dataloader:
+  train_batch_size: 24
+  eval_batch_size: 1
+  num_workers: 8
+  pin_memory: true
+
+trainer_config:
+  accumulate_grad_batches: 1
+  amp_level: "O1"
+  gpus: '0'
+  gradient_clip_val: 10.0
+  log_every_n_steps: 1000
+  benchmark: true
+  flush_logs_every_n_steps: 1000
+  deterministic: true
+  weights_summary: "top"
+  progress_bar_refresh_rate: 1
+  profiler: "simple"
+  process_position: 0
+  fast_dev_run: False
+  val_check_interval: 0.5
+  max_epochs: 20
+
+ModelCheckpoint_config:
+  monitor: val_acc
+  save_top_k: 3
+  mode: max
+
+
+
+
