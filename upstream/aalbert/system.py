@@ -1,10 +1,13 @@
 import os
 import torch
 import importlib
+import pathlib
+
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import IPython
 import pdb
+from pathlib import Path
 from torch import nn
 from shutil import copyfile
 from torch.nn.utils.rnn import pad_sequence
@@ -64,7 +67,7 @@ class PretrainedSystem(pl.LightningModule):
             index += 1
 
         self.objective_loss = eval(
-            f"nn.{training_config['loss_function']}")(reduction='sum')
+            f"nn.{training_config['loss_function']}")(**training_config['loss_config'])
         self.save_hyperparameters()
 
     def downsample(self, feats):
@@ -164,7 +167,7 @@ class PretrainedSystem(pl.LightningModule):
             input_att_masks).to(self.device)
         forward_config = {"spec_input": input_feats, "att_mask": input_att_masks,
                           "pos_idx": input_pos_idxes, "layer_index": -1}
-        last_hidden_states, _, _ = self.pretrained_model(**forward_config)
+        last_hidden_states, _ = self.pretrained_model(**forward_config)
 
         loss = 0
         for pred_head_idx in range(len(self.pretrained_heads)):
