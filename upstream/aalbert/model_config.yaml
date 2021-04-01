@@ -8,10 +8,10 @@ model:
     act_fn: "gelu"
     init_range: 0.02
   transform:
-    input_dim: 80  # 80 dimension mel-feature
-    downsample_rate: 4
+    input_dim: 160  # 80 dimension mel-feature
+    downsample_rate: 3
   position_embedding:
-    max_timestep: 250
+    max_timestep: 500
     trainable: False
   attention:
     attention_head: 12

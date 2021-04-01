@@ -5,7 +5,7 @@ masking_strategy:
 optimizer:
   name: AdamW
   lr: 5.0e-5
-  weight_decay: 1.0e-5
+  weight_decay: 1.0e-2
 
 scheduler:
   name: linear_decay_schedule_with_warmup
@@ -25,16 +25,17 @@ datarc:
 
   input:
     feature_type: mel
-    config_path: ./upstream/aalbert/input_config.yaml
+    config_path: ./input_config.yaml
 
 
   target:
     - feature_type: mel
-      config_path: ./upstream/aalbert/input_config.yaml
+      config_path: ./input_config.yaml
     - feature_type: linear
-      config_path: ./upstream/aalbert/target_config.yaml
+      config_path: ./target_config.yaml
 
-loss_function: SmoothL1Loss
+loss_function: L1Loss
+mode: mean
 
 trainer_config:
   accumulate_grad_batches: 1

@@ -8,5 +8,5 @@ input:
   feat_type: mel # feat_type can be: wav, complx, linear, mel, mfcc, phase
   channel: 0
   log: True
-  delta: 0
+  delta: 1
   cmvn: True

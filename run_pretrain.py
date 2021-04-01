@@ -67,13 +67,14 @@ def set_fixed_seed(args):
 def main():
     # get config and arguments
     args, config, model_config = pretrain_args()
-
-    with open(config['input']['config_path'], 'r') as file:
+    
+    root_name = Path("./upstream") / args.upstream
+    with open(root_name / config['input']['config_path'], 'r') as file:
         input_config = yaml.load(file, Loader=yaml.FullLoader)
     copyfile(input_config, f'{args.expdir}/input_config.yaml')
 
     for target in config['target']:
-        with open(target, 'r') as file:
+        with open(root / target, 'r') as file:
             target_config = yaml.load(file, Loader=yaml.FullLoader)
         copyfile(target_config, f'{args.expdir}/target_config_{target['feature_type']}.yaml')
 

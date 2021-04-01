@@ -37,7 +37,7 @@ def trainable_position_enc(position_table, idxes):
 def nontrainable_position_enc(position_table, idxes):
     max_idx = idxes.max()
     if max_idx >= position_table.weight.data.shape[0]:
-        sinusoid_table = static_position_table_f(hidden_dim, max_idx)
+        sinusoid_table = static_position_table_f(position_table.weight.data.shape[1], max_idx+1).to(position_table.weight.device)
         return sinusoid_table(idxes)
     return position_table(idxes)
 

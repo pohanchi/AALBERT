@@ -9,7 +9,7 @@ model:
     init_range: 0.02
   transform:
     input_dim: 80  # 80 dimension mel-feature
-    downsample_rate: 4
+    downsample_rate: 2
   position_embedding:
     max_timestep: 250
     trainable: False
