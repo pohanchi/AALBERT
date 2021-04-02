@@ -35,6 +35,9 @@ class PretrainedSystem(pl.LightningModule):
         self.pretrained_model = AALBERT(model_config['model'])
         self.optimizer_config = training_config['optimizer']
 
+        if self.masking_strategy['mask_token']:
+            self.mask_token_embedding = nn.Embedding(1, self.tradition_feat_extractor.get_output_dim() * self.downsample_rate)
+
         # example wav forward to tradition feature extractor
         _ = self.tradition_feat_extractor([examples_wavs])
 
@@ -104,7 +107,11 @@ class PretrainedSystem(pl.LightningModule):
             consecutive_offset = torch.arange(self.masking_strategy['mask_consecutive']).long(
             ).expand(base_indexes.size(0), self.masking_strategy['mask_consecutive'])
             indexes = (base_indexes + consecutive_offset + offset).reshape(-1)
+            
             stack[indexes] = 0
+            if self.masking_strategy['mask_token']:
+                stack[index] = self.mask_token_embedding[0]
+            
             mask_label[indexes] = 1
             mask_labels.append(mask_label)
 

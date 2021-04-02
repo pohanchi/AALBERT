@@ -1,6 +1,7 @@
 masking_strategy:
   mask_proportion: 0.15
   mask_consecutive: 1
+  mask_token: False
 
 optimizer:
   name: AdamW
