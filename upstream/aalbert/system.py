@@ -108,9 +108,10 @@ class PretrainedSystem(pl.LightningModule):
             ).expand(base_indexes.size(0), self.masking_strategy['mask_consecutive'])
             indexes = (base_indexes + consecutive_offset + offset).reshape(-1)
             
-            stack[indexes] = 0
-            if self.masking_strategy['mask_token']:
-                stack[index] = self.mask_token_embedding[0]
+            with torch.no_grad():
+                stack[indexes] = 0
+                if self.masking_strategy['mask_token']:
+                    stack[indexes] = self.mask_token_embedding(torch.LongTensor([0]).to(stack.device))
             
             mask_label[indexes] = 1
             mask_labels.append(mask_label)

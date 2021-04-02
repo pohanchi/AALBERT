@@ -1,7 +1,7 @@
 masking_strategy:
   mask_proportion: 0.15
   mask_consecutive: 1
-  mask_token: False
+  mask_token: True
 
 optimizer:
   name: AdamW
@@ -15,11 +15,11 @@ scheduler:
   
 datarc:
   file_path:
-    Librispeech360: ../../librispeech/LibriSpeech/train-clean-360/ # key: corresponding data path
+    Librispeech360: ../librispeech/LibriSpeech/LibriSpeech/train-clean-360/ # key: corresponding data path
     # you can custom your key_name and offer the corresponding path  
   
   dataloader:
-    batch_size: 24
+    batch_size: 48
     num_workers: 8
     pin_memory: True
   max_timestep: 160000
@@ -36,7 +36,8 @@ datarc:
       config_path: ./target_config.yaml
 
 loss_function: L1Loss
-mode: mean
+loss_config: 
+  reduction: mean
 
 trainer_config:
   accumulate_grad_batches: 1
