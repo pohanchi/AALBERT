@@ -1,0 +1,7 @@
+torch==1.7.0
+pyyaml==5.4.1
+librosa==0.8.0
+pytorch_lightning==1.2
+IPython==7.26.0
+torchaudio==0.7.0
+wandb==0.11.2

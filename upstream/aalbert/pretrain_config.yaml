@@ -35,7 +35,8 @@ datarc:
       config_path: ./target_config.yaml
 
 loss_function: L1Loss
-mode: mean
+loss_config:
+  reduction: mean
 
 trainer_config:
   accumulate_grad_batches: 1
