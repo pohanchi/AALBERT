@@ -34,7 +34,9 @@ datarc:
     - feature_type: linear
       config_path: ./upstream/aalbert/target_config.yaml
 
-loss_function: SmoothL1Loss
+loss_function: L1Loss
+loss_config: 
+  reduction: sum
 
 trainer_config:
   accumulate_grad_batches: 1

@@ -43,7 +43,7 @@ class PretrainedSystem(pl.LightningModule):
             self.target_feat_extractors.append(tradition_feat(config=feat['config_path']))
             self.pretrained_heads.append(SpecHead(**spechead_config))
         
-        self.objective_loss = eval(f"nn.{training_config['loss_function']}")(reduction='sum')
+        self.objective_loss = eval(f"nn.{training_config['loss_function']}")(**training_config['loss_config'])
         self.save_hyperparameters()
 
     def downsample(self, feats):
