@@ -50,11 +50,11 @@ After pretraining, We can extract the pretrained model feature on different down
         ```bash
         python run_downstram.py \
         -c downstream/voxceleb1_speaker/train_config.yaml \
-        -g result/pretrain/your_pretrained_model_folder/model_config.yaml  \
-        -t result/pretrain/your_pretrained_model_folder/pretrained_config.yaml \
+        -g result/pretrain/{your_pretrained_model_folder}/model_config.yaml  \
+        -t result/pretrain/{your_pretrained_model_folder}/pretrained_config.yaml \
         -u aalbert \
         -d voxceleb1_speaker \
-        -k result/pretrained/your pretrained_model_folder/checkpoints/checkpoint_you_want_to_use.ckpt \
+        -k result/pretrained/{your pretrained_model_folder}/checkpoints/{checkpoint_you_want_to_use.ckpt} \
         -n voxceleb1_result
         ```
     - `-n`: experiment name
