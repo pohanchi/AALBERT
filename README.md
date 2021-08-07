@@ -28,8 +28,9 @@ Here is also the official repository of AALBERT, which is Pytorch lightning reim
 - Stage 2: run pretraining script
 
     `python run_pretrain.py -n aalbert_pretrained -u aalbert`
-    - `n` : experiment_name
-    - `u` : upstream model: {two option: aalbert / mockingjay}
+    
+    - `-n` : experiment_name
+    - `-u` : upstream model: {two option: aalbert / mockingjay}
     - model will save on `result` folder after finish pretraining stage.
 
 ## Downstream Stage
@@ -48,14 +49,14 @@ After pretraining, We can extract the pretrained model feature on different down
     - voxceleb1_speaker: 
         `python run_downstram.py -c downstream/voxceleb1_speaker/train_config.yaml -g result/pretrain/your_pretrained_model_folder/model_config.yaml -t result/pretrain/your_pretrained_model_folder/pretrained_config.yaml -u aalbert -d voxceleb1_speaker -k result/pretrained/your pretrained_model_folder/checkpoints/checkpoint_you_want_to_use.ckpt -n voxceleb1_result`
 
-    -`n`: experiment name
-    -`c`: downstream training config
-    -`g`: pretrained model config
-    -`t`: load pretrained model pretrained config
-    -`u`: upstream model: {two option: aalbert / mockingjay}
-    -`d`: downstream task name
-    -`k`: model checkpoint path
-    -`f`: finetune pretrained model or not, default=False
+    - `-n`: experiment name
+    - `-c`: downstream training config
+    - `-g`: pretrained model config
+    - `-t`: load pretrained model pretrained config
+    - `-u`: upstream model: {two option: aalbert / mockingjay}
+    - `-d`: downstream task name
+    - `-k`: model checkpoint path
+    - `-f`: finetune pretrained model or not, default=False
 
 
 
