@@ -1,6 +1,7 @@
 masking_strategy:
   mask_proportion: 0.15
   mask_consecutive: 1
+  mask_token: True
 
 optimizer:
   name: AdamW
@@ -18,8 +19,8 @@ datarc:
     # you can custom your key_name and offer the corresponding path  
   
   dataloader:
-    batch_size: 24
-    num_workers: 8
+    batch_size: 12
+    num_workers: 4
     pin_memory: True
   max_timestep: 160000
 
@@ -29,17 +30,15 @@ datarc:
 
 
   target:
-    - feature_type: mel
-      config_path: ./input_config.yaml
     - feature_type: linear
       config_path: ./target_config.yaml
 
 loss_function: L1Loss
-loss_config:
-  reduction: mean
+loss_config: 
+  reduction: sum
 
 trainer_config:
-  accumulate_grad_batches: 1
+  accumulate_grad_batches: 4
   amp_level: "O1"
   gpus: '0'
   gradient_clip_val: 10.0

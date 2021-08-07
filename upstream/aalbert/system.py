@@ -35,6 +35,9 @@ class PretrainedSystem(pl.LightningModule):
         self.pretrained_model = AALBERT(model_config['model'])
         self.optimizer_config = training_config['optimizer']
 
+        if self.masking_strategy['mask_token']:
+            self.mask_token_embedding = nn.Embedding(2, self.tradition_feat_extractor.get_output_dim() * self.downsample_rate,padding_idx=0)
+
         # example wav forward to tradition feature extractor
         _ = self.tradition_feat_extractor([examples_wavs])
 
@@ -88,11 +91,11 @@ class PretrainedSystem(pl.LightningModule):
     def generate_mask_frame(self, stack_feats):
 
         mask_labels = []
-        for stack in stack_feats:
-            mask_label = torch.zeros(stack.size(0))
+        for i in range(len(stack_feats)):
+            mask_label = torch.zeros(stack_feats[i].size(0))
             valid_box_size = (
-                len(stack) // self.masking_strategy['mask_consecutive'])
-            remainder = len(stack) % self.masking_strategy['mask_consecutive']
+                len(stack_feats[i]) // self.masking_strategy['mask_consecutive'])
+            remainder = len(stack_feats[i]) % self.masking_strategy['mask_consecutive']
             probs = torch.zeros(valid_box_size).fill_(
                 self.masking_strategy['mask_proportion']/self.masking_strategy['mask_consecutive'])
 
@@ -104,7 +107,16 @@ class PretrainedSystem(pl.LightningModule):
             consecutive_offset = torch.arange(self.masking_strategy['mask_consecutive']).long(
             ).expand(base_indexes.size(0), self.masking_strategy['mask_consecutive'])
             indexes = (base_indexes + consecutive_offset + offset).reshape(-1)
-            stack[indexes] = 0
+            
+            with torch.no_grad():
+                stack_feats[i][indexes] = 0
+            if self.masking_strategy['mask_token']:
+                mask_init = torch.zeros(stack_feats[i].size(0)).to(stack_feats[i].device).long()
+                mask_init[indexes] = 1
+                mask_token =self.mask_token_embedding(mask_init)
+                #with torch.no_grad():
+                stack_feats[i] = stack_feats[i] + mask_token
+            
             mask_label[indexes] = 1
             mask_labels.append(mask_label)
 
@@ -228,6 +240,9 @@ class PretrainedSystem(pl.LightningModule):
                 "weight_decay": 0.0
             },
         ]
+
+        if self.masking_strategy['mask_token']:
+            all_parameters[1]['params'] += list(self.mask_token_embedding.parameters())
 
         optimizer_config = copy.deepcopy(self.optimizer_config)
         optimizer = eval(f"torch.optim.{optimizer_config.pop('name')}")(
