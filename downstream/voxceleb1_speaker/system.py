@@ -36,13 +36,12 @@ class DownstreamSystem(pl.LightningModule):
            upstream_config = yaml.safe_load(f)
 
         upstream_config['datarc']['input']['config_path'] = "/".join(args.upstream_training_config.split("/")[:-1]) + "/" + "input_config.yaml"
+        upstream_config['datarc']['target'][0]['config_path'] = "/".join(args.upstream_training_config.split("/")[:-1]) + "/" + "target_config.yaml"
 
         module_path = f'upstream.{args.upstream}'
-
         system = importlib.import_module(module_path +'.system')
         PretrainedSystem = system.PretrainedSystem.load_from_checkpoint(args.ckpt, args={}, model_config=model_config, training_config=upstream_config)
-        Upstream = PretrainedSystem
-        return Upstream
+        return PretrainedSystem
     
     def get_downstream(self, modelrc):
         input_dim = self.upstream.get_output_dim()
