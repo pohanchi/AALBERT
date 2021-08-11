@@ -12,6 +12,9 @@ Here is also the official repository of AALBERT, which is Pytorch lightning reim
 
 ## Pretrain Stage
 
+We use LibriSpeech as our pretraining stage dataset.
+You can download dataset by this [link](https://www.openslr.org/12).
+
 - Stage 1: modify dataset path to your local dataset path:
     - AALBERT: 
        config path: `upstream/aalbert/pretrain_config.yaml`
@@ -34,6 +37,8 @@ Here is also the official repository of AALBERT, which is Pytorch lightning reim
     - model will save on `result` folder after finish pretraining stage.
 
 ## Downstream Stage
+
+Here, we take voxceleb1 speaker classification as our downstream task. You can download dataset from their official [website](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/vox1.html).
 
 After pretraining, We can extract the pretrained model feature on different downstream tasks.
 
