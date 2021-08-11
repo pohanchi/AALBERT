@@ -53,7 +53,7 @@ After pretraining, We can extract the pretrained model feature on different down
 - Stage 2: run downstream script
     - voxceleb1_speaker: 
         ```bash
-        python run_downstram.py \
+        python run_downstream.py \
         -c downstream/voxceleb1_speaker/train_config.yaml \
         -g result/pretrain/{your_pretrained_model_folder}/model_config.yaml  \
         -t result/pretrain/{your_pretrained_model_folder}/pretrained_config.yaml \
